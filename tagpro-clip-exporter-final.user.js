@@ -23,8 +23,8 @@
         WHOLE_MAP_ZOOM: 1.6,
         PLAYER_POLL_INTERVAL: 500,
         PLAYER_POLL_MAX: 20,
-        CAP_BUFFER_BEFORE_MS: 3000,
-        CAP_BUFFER_AFTER_MS: 2800,
+        CAP_BUFFER_BEFORE_MS: 5000,
+        CAP_BUFFER_AFTER_MS: 3500,
     };
 
     const STYLES = `
