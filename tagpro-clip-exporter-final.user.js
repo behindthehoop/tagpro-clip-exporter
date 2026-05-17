@@ -405,38 +405,23 @@
         if (fromSec < toSec) { [fromSec, toSec] = [toSec, fromSec]; startInput.value = formatTime(fromSec); endInput.value = formatTime(toSec); }
         const clipDurationSec = fromSec - toSec;
 
-        // Step 1: Pause first so seek doesn't fight playback
-        ensurePaused();
-        await delay(200);
-
-        // Step 2: Seek to start time
+        // Step 1: Seek to start time
         updateStatus(`Seeking to ${formatTime(fromSec)}...`, 'info');
         if (!seekToTime(fromSec)) { updateStatus('Seek failed — is the replay loaded?', 'error'); return; }
 
-        // Step 3: Wait for seek to land
-        const seekOk = await waitForClockNear(fromSec, CONFIG.SEEK_TOLERANCE_SEC, CONFIG.SEEK_TIMEOUT_MS);
-        if (!seekOk) { const actual = getCurrentReplayTime(); updateStatus(`⚠ Seek may have missed — clock reads ${actual !== null ? formatTime(actual) : '???'}`, 'warn'); }
+        // Step 2: Wait for seek to settle (clock may not update while paused, so use a fixed delay)
+        await delay(1500);
 
-        // Step 4: Pause again (seeking can restart playback)
+        // Step 3: Pause so we can set up camera on a stable frame
         ensurePaused();
-        await delay(200);
+        await delay(300);
 
-        // Step 5: Apply camera while paused so renderer isn't mid-frame
+        // Step 4: Apply camera while paused
         updateStatus('Setting up camera...', 'info');
         applyViewMode(viewMode, playerId);
         await delay(500);
 
-        // Step 6: Verify clock is still near target after view change
-        const clockCheck = getCurrentReplayTime();
-        if (clockCheck !== null && Math.abs(clockCheck - fromSec) > CONFIG.SEEK_TOLERANCE_SEC) {
-            updateStatus(`⚠ Clock drifted to ${formatTime(clockCheck)} — re-seeking...`, 'warn');
-            seekToTime(fromSec);
-            await waitForClockNear(fromSec, CONFIG.SEEK_TOLERANCE_SEC, CONFIG.SEEK_TIMEOUT_MS);
-            ensurePaused();
-            await delay(200);
-        }
-
-        // Step 7: Start playback, brief settle, then record
+        // Step 5: Start playback, let first frames render, then record
         ensurePlaying();
         await delay(500);
 
