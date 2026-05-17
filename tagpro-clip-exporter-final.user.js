@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagPro Replay Clip Exporter
 // @namespace    https://tagpro.koalabeast.com/
-// @version      4.11
+// @version      4.1
 // @description  Export clips from TagPro replays as video files
 // @author       FLYMOLO (feat. Claude)
 // @match        https://tagpro.koalabeast.com/game?replay=*
@@ -83,7 +83,6 @@
     let savedPlayerId = null;
     let activeExtension = 'mp4';
     let cachedReplayEvents = null;
-    let gameStartClockSec = null;
 
     // ===================== UTILITIES =====================
 
@@ -110,17 +109,19 @@
         return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
     }
 
-    // The game clock counts DOWN from the start (e.g. 12:00). The slider
-    // counts UP from 0ms. To convert between them we need the game clock
-    // value at slider=0, computed once from any (clock, slider) pair.
-    // This handles mercy rule games where replay < full game duration.
+    // Computes the game clock value at slider position 0 (start of replay).
+    // Not cached — during pre-game countdown the clock shows countdown time
+    // instead of game time, which gives a wrong result. By recomputing each
+    // time, it self-corrects once the user seeks past the countdown.
     function getGameStartClock() {
-        if (gameStartClockSec !== null) return gameStartClockSec;
         const clock = getCurrentReplayTime();
         const slider = document.getElementById('replaySeekBar');
         if (clock === null || !slider) return null;
-        gameStartClockSec = clock + (parseFloat(slider.value) / 1000);
-        return gameStartClockSec;
+        const computed = clock + (parseFloat(slider.value) / 1000);
+        // A real TagPro game is always > 2 minutes. If we get < 120s,
+        // we're reading the pre-game countdown, not the game clock.
+        if (computed < 120) return null;
+        return computed;
     }
 
     function replayMsToClockSec(replayMs) {
@@ -252,6 +253,12 @@
         updateStatus('Fetching replay data...', 'info');
 
         try {
+            if (getGameStartClock() === null) {
+                updateStatus('Seek past the pre-game countdown first, then try again', 'warn');
+                btn.textContent = '🔍 Find Caps'; btn.disabled = false;
+                return;
+            }
+
             const data = await fetchReplayEvents(replayId);
             cachedReplayEvents = data;
 
