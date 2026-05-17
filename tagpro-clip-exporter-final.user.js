@@ -25,6 +25,7 @@
         PLAYER_POLL_MAX: 20,
         CAP_BUFFER_BEFORE_MS: 5000,
         CAP_BUFFER_AFTER_MS: 3500,
+        PREROLL_SEC: 3,  // seek this many seconds early to compensate for setup delay
     };
 
     const STYLES = `
@@ -424,9 +425,11 @@
         if (fromSec < toSec) { [fromSec, toSec] = [toSec, fromSec]; startInput.value = formatTime(fromSec); endInput.value = formatTime(toSec); }
         const clipDurationSec = fromSec - toSec;
 
-        // Step 1: Seek to start time
-        updateStatus(`Seeking to ${formatTime(fromSec)}...`, 'info');
-        if (!seekToTime(fromSec)) { updateStatus('Seek failed — is the replay loaded?', 'error'); return; }
+        // Seek earlier than FROM to compensate for setup delay.
+        // Clock counts down, so "earlier" = higher number.
+        const seekTarget = fromSec + CONFIG.PREROLL_SEC;
+        updateStatus(`Seeking to ${formatTime(seekTarget)}...`, 'info');
+        if (!seekToTime(seekTarget)) { updateStatus('Seek failed — is the replay loaded?', 'error'); return; }
 
         // Step 2: Let seek settle
         await delay(1500);
