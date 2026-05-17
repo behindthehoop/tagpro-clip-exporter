@@ -28,7 +28,7 @@
     };
 
     const STYLES = `
-        #clipExporterPanel{position:fixed;top:10px;right:10px;width:240px;background:rgba(30,30,30,.93);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#E0E0E0;font-family:'Segoe UI',Tahoma,sans-serif;font-size:13px;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px);overflow:hidden}
+        #clipExporterPanel{position:fixed;top:10px;right:10px;width:260px;background:rgba(30,30,30,.93);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#E0E0E0;font-family:'Segoe UI',Tahoma,sans-serif;font-size:13px;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px);overflow:hidden}
         .clip-header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.1)}
         .clip-title{font-weight:600;font-size:13px}
         #clipMinimizeBtn{background:none;border:none;color:#999;font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
@@ -37,7 +37,7 @@
         .clip-format-note{font-size:10px;padding:3px 6px;margin-bottom:6px;border-radius:3px;background:rgba(255,255,255,.05)}
         .clip-row{display:flex;align-items:center;gap:4px;margin-bottom:6px}
         .clip-row label{width:34px;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#AAA;flex-shrink:0}
-        .clip-row input[type="text"]{width:76px;flex:0 0 76px;padding:4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:Consolas,Monaco,monospace;font-size:13px;text-align:center}
+        .clip-row input[type="text"]{width:84px;flex:0 0 84px;padding:4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:Consolas,Monaco,monospace;font-size:13px;text-align:center}
         .clip-row input[type="text"]:focus{outline:none;border-color:rgba(100,180,255,.5)}
         .clip-now-btn{padding:4px 6px;font-size:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:3px;color:#bbb;cursor:pointer;flex-shrink:0}
         .clip-now-btn:hover{background:rgba(255,255,255,.18);color:#fff}
