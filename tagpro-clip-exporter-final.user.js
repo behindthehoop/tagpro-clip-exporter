@@ -129,11 +129,11 @@
         const clock = getCurrentReplayTime();
         const slider = document.getElementById('replaySeekBar');
         if (clock === null || !slider) return null;
-        const computed = clock + (parseFloat(slider.value) / 1000);
-        // A real TagPro game is always > 2 minutes. If we get < 120s,
-        // we're reading the pre-game countdown, not the game clock.
-        if (computed < 120) return null;
-        return computed;
+        const raw = clock + (parseFloat(slider.value) / 1000);
+        if (raw < 120) return null;
+        // Round to nearest second — game clocks always start on whole seconds.
+        // This stabilizes the value so slider can provide sub-second precision.
+        return Math.round(raw);
     }
 
     function replayMsToClockSec(replayMs) {
@@ -512,8 +512,11 @@
     }
 
     function grabTimeInto(which) {
-        const t = getCurrentReplayTime();
-        if (t === null) { updateStatus('Can\'t read clock — is the replay loaded?', 'warn'); return; }
+        const start = getGameStartClock();
+        const slider = document.getElementById('replaySeekBar');
+        if (start === null || !slider) { updateStatus('Can\'t read clock — is the replay loaded?', 'warn'); return; }
+        const preciseSec = start - (parseFloat(slider.value) / 1000);
+        const t = Math.max(0, Math.round(preciseSec * 60) / 60); // round to nearest frame
         document.querySelector(which === 'start' ? '#clipStartTime' : '#clipEndTime').value = formatTime(t);
         updateStatus(`${which === 'start' ? 'FROM' : 'TO'} → ${formatTime(t)}`, 'info');
     }
