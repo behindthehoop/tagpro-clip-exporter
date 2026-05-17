@@ -37,7 +37,7 @@
         .clip-format-note{font-size:10px;padding:3px 6px;margin-bottom:6px;border-radius:3px;background:rgba(255,255,255,.05)}
         .clip-row{display:flex;align-items:center;gap:4px;margin-bottom:6px}
         .clip-row label{width:34px;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#AAA;flex-shrink:0}
-        .clip-row input[type="text"]{width:60px;flex:0 0 60px;padding:4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:Consolas,Monaco,monospace;font-size:14px;text-align:center}
+        .clip-row input[type="text"]{width:76px;flex:0 0 76px;padding:4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:Consolas,Monaco,monospace;font-size:13px;text-align:center}
         .clip-row input[type="text"]:focus{outline:none;border-color:rgba(100,180,255,.5)}
         .clip-now-btn{padding:4px 6px;font-size:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:3px;color:#bbb;cursor:pointer;flex-shrink:0}
         .clip-now-btn:hover{background:rgba(255,255,255,.18);color:#fff}
@@ -94,7 +94,14 @@
     function parseTime(str) {
         if (!str || !str.trim()) return null;
         const parts = str.trim().split(':');
+        if (parts.length === 3) {
+            // MM:SS:FF — minutes, seconds, frame (0-59 at 60fps)
+            const m = parseInt(parts[0], 10), s = parseInt(parts[1], 10), f = parseInt(parts[2], 10);
+            if (!isNaN(m) && !isNaN(s) && !isNaN(f) && m >= 0 && s >= 0 && s < 60 && f >= 0 && f < 60)
+                return m * 60 + s + f / 60;
+        }
         if (parts.length === 2) {
+            // MM:SS — backward compatible, assumes frame 00
             const m = parseInt(parts[0], 10), s = parseInt(parts[1], 10);
             if (!isNaN(m) && !isNaN(s) && s >= 0 && s < 60 && m >= 0) return m * 60 + s;
         }
@@ -106,7 +113,12 @@
     }
 
     function formatTime(sec) {
-        return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+        const totalFrames = Math.round(Math.max(0, sec) * 60);
+        const f = totalFrames % 60;
+        const totalSec = Math.floor(totalFrames / 60);
+        const s = totalSec % 60;
+        const m = Math.floor(totalSec / 60);
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(f).padStart(2, '0')}`;
     }
 
     // Computes the game clock value at slider position 0 (start of replay).
@@ -401,8 +413,8 @@
         const startInput = document.querySelector('#clipStartTime'), endInput = document.querySelector('#clipEndTime');
         let fromSec = parseTime(startInput.value), toSec = parseTime(endInput.value);
 
-        if (fromSec === null) { updateStatus('Enter a valid FROM time (e.g. 5:18)', 'error'); return; }
-        if (toSec === null) { updateStatus('Enter a valid TO time (e.g. 4:50)', 'error'); return; }
+        if (fromSec === null) { updateStatus('Enter a valid FROM time (e.g. 5:18 or 5:18:30)', 'error'); return; }
+        if (toSec === null) { updateStatus('Enter a valid TO time (e.g. 4:50 or 4:50:00)', 'error'); return; }
         if (fromSec === toSec) { updateStatus('FROM and TO are the same', 'error'); return; }
 
         const viewMode = document.querySelector('#clipViewMode')?.value || 'whole';
@@ -537,8 +549,8 @@
                     <button id="clipFindCapsBtn">🔍 Find Caps</button>
                     <select id="clipCapSelect" disabled><option value="">Click "Find Caps" first...</option></select>
                 </div></details>
-                <div class="clip-row"><label>FROM</label><input type="text" id="clipStartTime" placeholder="5:18"><button class="clip-now-btn" id="clipSetStart">Now</button></div>
-                <div class="clip-row"><label>TO</label><input type="text" id="clipEndTime" placeholder="4:50"><button class="clip-now-btn" id="clipSetEnd">Now</button></div>
+                <div class="clip-row"><label>FROM</label><input type="text" id="clipStartTime" placeholder="5:18:00"><button class="clip-now-btn" id="clipSetStart">Now</button></div>
+                <div class="clip-row"><label>TO</label><input type="text" id="clipEndTime" placeholder="4:50:30"><button class="clip-now-btn" id="clipSetEnd">Now</button></div>
                 <div class="clip-row clip-settings">
                     <select id="clipResolution" title="Output resolution"><option value="native">Native</option><option value="720">720p</option><option value="1080" selected>1080p</option></select>
                     <select id="clipBitrate" title="Video bitrate"><option value="8000000">8 Mbps</option><option value="12000000" selected>12 Mbps</option><option value="20000000">20 Mbps</option></select>
@@ -547,7 +559,7 @@
                     <select id="clipViewMode" title="Camera view"><option value="whole">Whole Map</option><option value="pov">POV</option></select>
                     <select id="clipPlayerSelect" title="Follow player" disabled><option value="">Select player...</option></select>
                 </div>
-                <div class="clip-hint">Press <kbd>/</kbd> to grab time (FROM ↔ TO)</div>
+                <div class="clip-hint">Press <kbd>/</kbd> to grab time · Format: MM:SS:FF (60fps)</div>
                 <div class="clip-row clip-actions"><button id="clipExportBtn">⏺ Export Clip</button><button id="clipCancelBtn" style="display:none;">⏹ Cancel</button></div>
                 <div id="clipExporterStatus" class="clip-status">Enter times manually or use auto-detect above.</div>
                 <details class="clip-help"><summary>How to use</summary>
