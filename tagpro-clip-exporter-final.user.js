@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagPro Replay Clip Exporter
 // @namespace    https://tagpro.koalabeast.com/
-// @version      4.1
+// @version      4.11
 // @description  Export clips from TagPro replays as video files
 // @author       FLYMOLO (feat. Claude)
 // @match        https://tagpro.koalabeast.com/game?replay=*
@@ -448,8 +448,14 @@
 
     // ===================== PLAYBACK & CAMERA =====================
 
-    function ensurePlaying() { if (document.querySelector('.fa-play')) pressSpace(); }
-    function ensurePaused() { if (document.querySelector('.fa-pause')) pressSpace(); }
+    function ensurePlaying() {
+        const icon = document.querySelector('.fa-play');
+        if (icon) (icon.closest('button') || icon.parentElement || icon).click();
+    }
+    function ensurePaused() {
+        const icon = document.querySelector('.fa-pause');
+        if (icon) (icon.closest('button') || icon.parentElement || icon).click();
+    }
 
     function applyViewMode(mode, playerId) {
         savedZoom = tagpro.zoom;
