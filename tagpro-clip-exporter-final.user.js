@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagPro Replay Clip Exporter
 // @namespace    https://tagpro.koalabeast.com/
-// @version      4.0
+// @version      4.1
 // @description  Export clips from TagPro replays as video files
 // @author       FLYMOLO (feat. Claude)
 // @match        https://tagpro.koalabeast.com/game?replay=*
@@ -23,8 +23,8 @@
         WHOLE_MAP_ZOOM: 1.6,
         PLAYER_POLL_INTERVAL: 500,
         PLAYER_POLL_MAX: 20,
-        CAP_BUFFER_BEFORE_MS: 1000,
-        CAP_BUFFER_AFTER_MS: 800,
+        CAP_BUFFER_BEFORE_MS: 3000,
+        CAP_BUFFER_AFTER_MS: 2800,
     };
 
     const STYLES = `
@@ -83,6 +83,7 @@
     let savedPlayerId = null;
     let activeExtension = 'mp4';
     let cachedReplayEvents = null;
+    let gameStartClockSec = null;
 
     // ===================== UTILITIES =====================
 
@@ -109,9 +110,28 @@
         return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
     }
 
-    function sliderMsToClockSec(ms, sliderMax) { return (sliderMax - ms) / 1000; }
-    function clockSecToSliderMs(clockSec, sliderMax) { return sliderMax - (clockSec * 1000); }
-    function replayMsToClockSec(replayMs, sliderMax) { return sliderMsToClockSec(replayMs, sliderMax); }
+    // The game clock counts DOWN from the start (e.g. 12:00). The slider
+    // counts UP from 0ms. To convert between them we need the game clock
+    // value at slider=0, computed once from any (clock, slider) pair.
+    // This handles mercy rule games where replay < full game duration.
+    function getGameStartClock() {
+        if (gameStartClockSec !== null) return gameStartClockSec;
+        const clock = getCurrentReplayTime();
+        const slider = document.getElementById('replaySeekBar');
+        if (clock === null || !slider) return null;
+        gameStartClockSec = clock + (parseFloat(slider.value) / 1000);
+        return gameStartClockSec;
+    }
+
+    function replayMsToClockSec(replayMs) {
+        const start = getGameStartClock();
+        return start !== null ? start - (replayMs / 1000) : null;
+    }
+
+    function clockSecToSliderMs(clockSec) {
+        const start = getGameStartClock();
+        return start !== null ? (start - clockSec) * 1000 : null;
+    }
 
     function normalizeTimeInput(input) {
         const t = parseTime(input.value);
@@ -132,7 +152,9 @@
         const slider = document.getElementById('replaySeekBar');
         if (!slider || typeof $ === 'undefined') return false;
         const sliderMax = parseFloat(slider.max);
-        const clampedMs = Math.max(0, Math.min(sliderMax, Math.round(clockSecToSliderMs(targetClockSec, sliderMax))));
+        const targetMs = clockSecToSliderMs(targetClockSec);
+        if (targetMs === null) return false;
+        const clampedMs = Math.max(0, Math.min(sliderMax, Math.round(targetMs)));
         console.log(`[Clip Exporter] Seek: target=${formatTime(targetClockSec)} → ${clampedMs}ms/${sliderMax}ms`);
         $('#replaySeekBar').val(clampedMs).trigger('mouseup');
         return true;
@@ -239,15 +261,13 @@
                 return;
             }
 
-            const slider = document.getElementById('replaySeekBar');
-            const sliderMax = slider ? parseFloat(slider.max) : null;
-
             sel.innerHTML = '<option value="">Select a cap...</option>';
             data.highlights.forEach((h, i) => {
                 const opt = document.createElement('option');
                 opt.value = i;
-                const timeLabel = sliderMax !== null
-                    ? formatTime(Math.max(0, Math.round(replayMsToClockSec(h.capMs, sliderMax))))
+                const clockSec = replayMsToClockSec(h.capMs);
+                const timeLabel = clockSec !== null
+                    ? formatTime(Math.max(0, Math.round(clockSec)))
                     : `${(h.capMs / 1000).toFixed(0)}s in`;
                 opt.textContent = `${h.playerTeam === 1 ? '🔴' : '🔵'} ${h.playerName} cap @ ${timeLabel}`;
                 sel.appendChild(opt);
@@ -270,12 +290,12 @@
         const h = cachedReplayEvents.highlights[idx];
         if (!h) return;
 
-        const slider = document.getElementById('replaySeekBar');
-        const sliderMax = slider ? parseFloat(slider.max) : null;
-        if (sliderMax === null) { updateStatus('Seek bar not found', 'error'); return; }
+        const fromClock = replayMsToClockSec(Math.max(0, h.grabMs - CONFIG.CAP_BUFFER_BEFORE_MS));
+        const toClock = replayMsToClockSec(h.capMs + CONFIG.CAP_BUFFER_AFTER_MS);
+        if (fromClock === null || toClock === null) { updateStatus('Can\'t convert times — is the replay loaded?', 'error'); return; }
 
-        const fromClockSec = Math.max(0, Math.round(replayMsToClockSec(Math.max(0, h.grabMs - CONFIG.CAP_BUFFER_BEFORE_MS), sliderMax)));
-        const toClockSec = Math.max(0, Math.round(replayMsToClockSec(h.capMs + CONFIG.CAP_BUFFER_AFTER_MS, sliderMax)));
+        const fromClockSec = Math.max(0, Math.round(fromClock));
+        const toClockSec = Math.max(0, Math.round(toClock));
 
         document.querySelector('#clipStartTime').value = formatTime(fromClockSec);
         document.querySelector('#clipEndTime').value = formatTime(toClockSec);
@@ -385,14 +405,38 @@
         if (fromSec < toSec) { [fromSec, toSec] = [toSec, fromSec]; startInput.value = formatTime(fromSec); endInput.value = formatTime(toSec); }
         const clipDurationSec = fromSec - toSec;
 
+        // Step 1: Pause first so seek doesn't fight playback
+        ensurePaused();
+        await delay(200);
+
+        // Step 2: Seek to start time
         updateStatus(`Seeking to ${formatTime(fromSec)}...`, 'info');
         if (!seekToTime(fromSec)) { updateStatus('Seek failed — is the replay loaded?', 'error'); return; }
 
+        // Step 3: Wait for seek to land
         const seekOk = await waitForClockNear(fromSec, CONFIG.SEEK_TOLERANCE_SEC, CONFIG.SEEK_TIMEOUT_MS);
         if (!seekOk) { const actual = getCurrentReplayTime(); updateStatus(`⚠ Seek may have missed — clock reads ${actual !== null ? formatTime(actual) : '???'}`, 'warn'); }
 
+        // Step 4: Pause again (seeking can restart playback)
+        ensurePaused();
+        await delay(200);
+
+        // Step 5: Apply camera while paused so renderer isn't mid-frame
+        updateStatus('Setting up camera...', 'info');
         applyViewMode(viewMode, playerId);
-        await delay(300);
+        await delay(500);
+
+        // Step 6: Verify clock is still near target after view change
+        const clockCheck = getCurrentReplayTime();
+        if (clockCheck !== null && Math.abs(clockCheck - fromSec) > CONFIG.SEEK_TOLERANCE_SEC) {
+            updateStatus(`⚠ Clock drifted to ${formatTime(clockCheck)} — re-seeking...`, 'warn');
+            seekToTime(fromSec);
+            await waitForClockNear(fromSec, CONFIG.SEEK_TOLERANCE_SEC, CONFIG.SEEK_TIMEOUT_MS);
+            ensurePaused();
+            await delay(200);
+        }
+
+        // Step 7: Start playback, brief settle, then record
         ensurePlaying();
         await delay(500);
 
@@ -422,6 +466,7 @@
     // ===================== PLAYBACK & CAMERA =====================
 
     function ensurePlaying() { if (document.querySelector('.fa-play')) pressSpace(); }
+    function ensurePaused() { if (document.querySelector('.fa-pause')) pressSpace(); }
 
     function applyViewMode(mode, playerId) {
         savedZoom = tagpro.zoom;
@@ -544,7 +589,7 @@
     function init() {
         if (document.getElementById('clipExporterPanel')) return;
         let n = 0;
-        const check = setInterval(() => { n++; if (document.querySelector('#viewport')) { clearInterval(check); console.log('[Clip Exporter] v4.0'); createUI(); } else if (n >= 30) clearInterval(check); }, 1000);
+        const check = setInterval(() => { n++; if (document.querySelector('#viewport')) { clearInterval(check); console.log('[Clip Exporter] v4.1'); createUI(); } else if (n >= 30) clearInterval(check); }, 1000);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
