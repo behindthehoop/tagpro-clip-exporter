@@ -409,19 +409,17 @@
         updateStatus(`Seeking to ${formatTime(fromSec)}...`, 'info');
         if (!seekToTime(fromSec)) { updateStatus('Seek failed — is the replay loaded?', 'error'); return; }
 
-        // Step 2: Wait for seek to settle (clock may not update while paused, so use a fixed delay)
+        // Step 2: Let seek settle
         await delay(1500);
 
-        // Step 3: Pause so we can set up camera on a stable frame
-        ensurePaused();
-        await delay(300);
-
-        // Step 4: Apply camera while paused
-        updateStatus('Setting up camera...', 'info');
-        applyViewMode(viewMode, playerId);
+        // Step 3: Apply camera, then play, then record
+        try {
+            applyViewMode(viewMode, playerId);
+        } catch (e) {
+            console.warn('[Clip Exporter] applyViewMode error:', e.message);
+        }
         await delay(500);
 
-        // Step 5: Start playback, let first frames render, then record
         ensurePlaying();
         await delay(500);
 
