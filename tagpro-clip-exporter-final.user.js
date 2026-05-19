@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagPro Replay Clip Exporter
 // @namespace    https://tagpro.koalabeast.com/
-// @version      4.1
+// @version      4.2
 // @description  Export clips from TagPro replays as video files
 // @author       FLYMOLO (feat. Claude)
 // @match        https://tagpro.koalabeast.com/game?replay=*
@@ -24,7 +24,7 @@
         PLAYER_POLL_INTERVAL: 500,
         PLAYER_POLL_MAX: 20,
         CAP_BUFFER_BEFORE_MS: 5000,
-        CAP_BUFFER_AFTER_MS: 3500,
+        CAP_BUFFER_AFTER_MS: 1000,
         PREROLL_SEC: 3,  // seek this many seconds early to compensate for setup delay
     };
 
@@ -360,8 +360,20 @@
         const ctx = recordCanvas.getContext('2d');
         ctx.globalCompositeOperation = 'copy';
 
-        function copyFrame() { ctx.drawImage(gameCanvas, 0, 0, w, h); copyFrameId = requestAnimationFrame(copyFrame); }
-        copyFrame();
+        // Throttle copy loop to match recording FPS. On high-refresh displays
+        // (e.g. 480fps), the unthrottled rAF fires hundreds of times per second
+        // but we only need 60 copies/sec for a 60fps recording. The extra
+        // drawImage calls waste GPU time and cause stuttering.
+        let lastCopyTime = 0;
+        const copyInterval = 1000 / CONFIG.FPS;
+        function copyFrame(timestamp) {
+            if (timestamp - lastCopyTime >= copyInterval) {
+                ctx.drawImage(gameCanvas, 0, 0, w, h);
+                lastCopyTime = timestamp;
+            }
+            copyFrameId = requestAnimationFrame(copyFrame);
+        }
+        copyFrame(0);
 
         const stream = recordCanvas.captureStream(CONFIG.FPS);
         recordedChunks = [];
@@ -488,7 +500,7 @@
             tagpro.playerId = Number(playerId);
             tagpro.zoom = 1;
         } else {
-            simulateKey('c', 'KeyC', 67);
+            tagpro.viewport.followPlayer = false;
             tagpro.zoom = CONFIG.WHOLE_MAP_ZOOM;
         }
     }
@@ -603,7 +615,7 @@
     function init() {
         if (document.getElementById('clipExporterPanel')) return;
         let n = 0;
-        const check = setInterval(() => { n++; if (document.querySelector('#viewport')) { clearInterval(check); console.log('[Clip Exporter] v4.1'); createUI(); } else if (n >= 30) clearInterval(check); }, 1000);
+        const check = setInterval(() => { n++; if (document.querySelector('#viewport')) { clearInterval(check); console.log('[Clip Exporter] v4.2'); createUI(); } else if (n >= 30) clearInterval(check); }, 1000);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
